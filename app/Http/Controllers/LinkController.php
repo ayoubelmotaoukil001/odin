@@ -109,11 +109,12 @@ public function store(Request $request)
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(string $id)
+    public function destroy(Link $link)
     {
-        $link = Link::findOrFail($id);
-        $link->delete();
 
+        $this->authorize('delete' ,$link);
+
+        $link ->delete() ;
         return redirect()->back()->with('success', 'Link deleted successfully');
     }
 
