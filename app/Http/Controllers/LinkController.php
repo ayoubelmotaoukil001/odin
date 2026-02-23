@@ -2,24 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Events\LinkCreated;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use App\Models\Link;
 use App\Models\Category;
 use App\Models\Tag;
+use App\Http\Requests\StoreLinkRequest ;
+use App\Events\LinkActionEvent ;
 
 class LinkController extends Controller
 {
     /**
      * Display a listing of the resource.
+     * 
      */
+    
     public function index()
     {
-        
-        $links = Link::with('category', 'tags')->get();
+        if (Auth::user()->role === 'admin') {
+            $links = Link::with('category', 'tags', 'user')->get();
+        } else {
+            
+            $links = Link::where('user_id', Auth::id())
+                        ->with('category', 'tags')
+                        ->get();
+        }
+
         return view('links.index', compact('links'));
     }
-
     /**
      * Show the form for creating a new resource.
      */
@@ -34,26 +45,19 @@ class LinkController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-public function store(Request $request)
-{
-    $request->validate([
-        'title' => 'required|string|max:255',
-        'url' => 'required|url',
-        'tags' => 'nullable|array',
-        'tags.*' => 'exists:tags,id',
-    ]);
 
-    $link = Link::create([
+public function store(StoreLinkRequest $request) 
+{
+
+   $link = Link::create([
         'title' => $request->title,
         'url' => $request->url,
-        'user_id' => Auth::id(),
+        'category_id' => $request->category_id,
+        'user_id' => Auth::id() ,
     ]);
+    event( new LinkCreated($link)) ;
 
-    if ($request->has('tags')) {
-        $link->tags()->attach($request->tags);
-    }
-
-    return redirect()->route('links.index')->with('success', 'Link created successfully');
+    return redirect()->route('links.index')->with('success', 'link addes suucesfuly');
 }
 
 
@@ -109,26 +113,81 @@ public function store(Request $request)
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(Link $link)
+        public function destroy(Link $link)
     {
+        $this->authorize('delete', $link);
 
-        $this->authorize('delete' ,$link);
+        
+        event(new \App\Events\LinkActionEvent(Auth::user(), $link, 'deleted'));
 
-        $link ->delete() ;
-        return redirect()->back()->with('success', 'Link deleted successfully');
+        $link->delete();
+        return redirect()->route('links.index')->with('success', 'Link moved to trash.');
     }
 
-    public function attachTag(Request $request, Link $link)
-{
-    $request->validate([
-        'tag_id' => 'required|exists:tags,id',
-    ]);
 
+
+
+        public function attachTag(Request $request, Link $link)
+    {
+        $request->validate([
+            'tag_id' => 'required|exists:tags,id',
+        ]);
+
+        
+        $link->tags()->syncWithoutDetaching([$request->tag_id]);
+
+        return redirect()->route('links.show', $link->id)
+                        ->with('success', 'Tag assigned to link successfully!');
+    }
+
+        public function trash()
+    {
+        $links = Link::onlyTrashed()
+                    ->where('user_id', Auth::id())
+                    ->get();
+                    
+        return view('links.trash', compact('links'));
+    }
+
+
+        public function restore($id)
+    {
+        $link = Link::withTrashed()->findOrFail($id);
+        $this->authorize('restore', $link);
+
+        $link->restore();
+
+        return redirect()->route('links.index')->with('success', 'Link restored successfully.');
+    }
+
+        public function forceDelete($id)
+    {
+        $link = Link::withTrashed()->findOrFail($id);
+
+        
+        if (Auth::user()->role !== 'admin') {
+            abort(403);
+        }
+
+        $link->forceDelete(); 
+
+        return redirect()->route('links.trash')->with('success', 'Link deleted permanently.');
+    }
+        public function toggleFavorite(\App\Models\Link $link)
+    {
+        
+        auth()->user()->favoriteLinks()->toggle($link->id);
+
+        return back()->with('success', 'Favorites updated!');
+    }
+    public function favorites()
+    {
     
-    $link->tags()->syncWithoutDetaching([$request->tag_id]);
+        $links = auth()->user()->favoriteLinks()->with('category', 'tags')->latest()->get();
+        
+        
+        return view('links.index', compact('links'));
+    }
 
-    return redirect()->route('links.show', $link->id)
-                     ->with('success', 'Tag assigned to link successfully!');
-}
 
 }
