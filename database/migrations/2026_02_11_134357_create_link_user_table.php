@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId("user_id")->constrained()->onDelete("cascade") ;
             $table->foreignId("link_id")->constrained()->onDelete("cascade") ;
-            $table->enum('permession ', ['view','edit'])->default('view') ;
+            $table->enum('permission', ['view','edit'])->default('view') ;
             $table->timestamps();
         });
     }
