@@ -2,8 +2,18 @@
 <x-slot name="header">
     <h2>Create New Link</h2>
 </x-slot>
+@if ($errors->any())
+    <div style="color: red;">
+        <ul>
+            @foreach ($errors->all() as $error)
+                <li>{{ $error }}</li>
+            @endforeach
+        </ul>
+    </div>
+@endif
 
 <div class="p-4">
+    
     <form method="POST" action="{{ route('links.store') }}">
         @csrf
         <div class="mb-2">
